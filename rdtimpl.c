@@ -27,11 +27,32 @@ double CORRUPT_PROBABILITY = 0;
 int recvSeqNum = 0;
 int sendSeqNum = 0;
 
+int lenLastSent = 0;
+int sockLastSent = 0;
+struct sockaddr *lastsock_addr = NULL;
+socklen_t lastaddr_len = 0;
+
+int retransmitCount = 0;
+bool signaled = false;
+bool closingTime = false;
+
 uint8_t recvBuf[RDT_PACKET_MAX];
 uint8_t sendBuf[RDT_PACKET_MAX];
 
 void alarmHandler(int signum)
 {
+   signaled = true;
+   if (retransmitCount != 5)
+   {
+      // we'll retransmit the next time through the sending loop
+      retransmitCount++;
+   }
+   //once we're retransmitted 5 times, we assume that the problem is a failure to receive the
+   // final ACK from the other side and we just will close the connection
+   else
+   {
+      closingTime = true;
+   }
 }
 
 int rdt_recv(int sockfd, uint8_t *userbuf, int len,
@@ -47,8 +68,6 @@ int rdt_recv(int sockfd, uint8_t *userbuf, int len,
       error(0,0,"Waiting for another");
 
       res = recvfrom(sockfd, recvBuf, len+RDT_HEADER_SIZE, 0, sock_addr, addr_len);
-      fprintf(stderr, "First byte recvd is a %02x\n", ((unsigned char *) recvBuf)[RDT_HEADER_SIZE+FT_HEADER_SIZE]);
-      fprintf(stderr, "Last byte recvd is a %02x\n", ((unsigned char *) recvBuf)[len-1]);
       header = (rdt_header_t *) recvBuf;
       payload = recvBuf + RDT_HEADER_SIZE;
 
@@ -69,6 +88,11 @@ int rdt_recv(int sockfd, uint8_t *userbuf, int len,
          sendto(sockfd, recvBuf, RDT_HEADER_SIZE, 0, sock_addr, *addr_len);
 
          //and wait for a non-corrupt packet
+         continue;
+      }
+      else if (trueWithProb(LOSS_PROBABILITY))
+      {
+         fprintf(stderr, "PACKET LOST\n");
          continue;
       }
       else if (header->rdt_seqNum + header->rdt_dataSize <= recvSeqNum) //no new data received
@@ -131,6 +155,7 @@ int rdt_send(int sockfd, uint8_t *userbuf, int len, struct sockaddr *sock_addr, 
    rdt_header_t *ackheader;
    int res;
    time_t lastSent;
+   bool resetTimer = true;
 
    header->rdt_type = RDT_TYPE_DATA;
    header->rdt_seqNum = sendSeqNum;
@@ -144,19 +169,31 @@ int rdt_send(int sockfd, uint8_t *userbuf, int len, struct sockaddr *sock_addr, 
    {
       printSendInfo(sendBuf);
 
-      fprintf(stderr, "First byte sent is a %02x\n", ((unsigned char *) sendBuf)[FT_HEADER_SIZE+RDT_HEADER_SIZE]);
-      fprintf(stderr, "Last byte sent is a %02x\n", ((unsigned char *) sendBuf)[len+RDT_HEADER_SIZE-1]);
       res = sendto(sockfd, sendBuf, len + RDT_HEADER_SIZE, 0, sock_addr, addr_len);
-      alarm(0);
-      alarm(3);
-      siginterrupt(SIGALRM, 1);
+
+      lenLastSent = len+RDT_HEADER_SIZE;
+      sockLastSent = sockfd;
+      lastsock_addr = sock_addr;
+      lastaddr_len = addr_len;
+
+      if (resetTimer)
+      {
+         alarm(0);
+         alarm(1);
+         siginterrupt(SIGALRM, 1);
+      }
 
 
       res = recvfrom(sockfd, recvBuf, RDT_HEADER_SIZE, 0, sock_addr, &addr_len);
 
-      if (res != RDT_HEADER_SIZE) 
+      if (closingTime != true) 
       {
-         break;  //alarm went off indicating closing timeout
+         break;  //alarm has gone off enough times that we assume closing timeout
+      }
+      if (signaled)
+      {
+         signaled = false;
+         continue; //timeout, send again
       }
 
       ackheader = (rdt_header_t *) recvBuf;
@@ -164,6 +201,13 @@ int rdt_send(int sockfd, uint8_t *userbuf, int len, struct sockaddr *sock_addr, 
       if (trueWithProb(CORRUPT_PROBABILITY))
       {
          printCorrupt();
+         continue;
+      }
+
+      if (trueWithProb(LOSS_PROBABILITY))
+      {
+         fprintf(stderr, "PACKET LOST\n");
+         resetTimer = false;
          continue;
       }
 

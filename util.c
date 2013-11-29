@@ -26,6 +26,7 @@ char ft_message_names[3][5] = {
 
 void printRecvInfo(void *buf)
 {
+   /*
    printf("RECEIVING HEX DUMP\n");
    int i;
    int j;
@@ -38,6 +39,7 @@ void printRecvInfo(void *buf)
       printf("\n");
    }
    printf("HEX DUMP---------------------------------\n");
+   */
    rdt_header_t *rdtheader = (rdt_header_t *) buf;
 
    printf   ("+--- RDT Packet Recieved ---+\n"
@@ -65,6 +67,7 @@ void printRecvInfo(void *buf)
 
 void printSendInfo(void *buf)
 {
+   /*
    printf("SENDING HEX DUMP\n");
    int i;
    int j;
@@ -77,6 +80,7 @@ void printSendInfo(void *buf)
       printf("\n");
    }
    printf("HEX DUMP---------------------------------\n");
+   */
 
    rdt_header_t *rdtheader = (rdt_header_t *) buf;
 

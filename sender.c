@@ -45,7 +45,6 @@ void sendLoop(int sockfd)
    // Attempt to open the file requested
    currentFd = open((char *) payload, O_RDONLY);
 
-   // If we can't open the file, for whatever reason, send a NOPE
    if (currentFd < 0)
    {
      error(FATAL, FATAL, "can't open file");
@@ -61,9 +60,6 @@ void sendLoop(int sockfd)
       // When we add windows or repeats or whatever, we'll probably need lseek or something
       //  to adjust our position in the file to read when we retransmit certain packets
       int bytesRead = read(currentFd, payload, FT_MAX_DATA);
-
-      fprintf(stderr, "First byte read is a %02x\n", ((unsigned char *) payload)[0]);
-      fprintf(stderr, "Last byte read is a %02x\n", ((unsigned char *) payload)[FT_MAX_DATA-1]);
 
       if (bytesRead < 0) error(FATAL, FATAL, "can't read file");
 

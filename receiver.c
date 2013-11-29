@@ -56,9 +56,6 @@ void recvLoop(int sockfd, struct sockaddr *serv_addr, socklen_t addr_len, char *
 
    while (1)
    {
-      fprintf(stderr, "First byte written is a %02x\n", ((unsigned char *) payload)[0]);
-      fprintf(stderr, "Last byte written is a %02x\n", ((unsigned char *) payload)[ftheader->ft_dataSize-1]);
-      fprintf(stderr, "Written to position %d\n", lseek(currentFd, 0, SEEK_CUR));
       res = write(currentFd, payload, ftheader->ft_dataSize);
 
       fprintf(stderr, "%d bytes written\n", ftheader->ft_dataSize);
