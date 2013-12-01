@@ -1,0 +1,3 @@
+11/29/13 12:00p Basic server, runs on UDP, can respond to a client's message (a file name) by echoing back.
+
+11/30/13 4:00p  We're moving. Timeout works, now we just need to add FIN's back in and make sure every packet reaches the destination. Then time to implement GBN or selective repeat.
