@@ -19,13 +19,15 @@
 static struct sockaddr_in * cliref;
 static int * sockref;
 static int * fileref;
-static int last_acked = 0;
+static uint16_t * tracker;
+static int base = 0;
 static int retrans_count = 0;
-static size_t cwnd, top_seq_num = -1;
+static size_t cwnd, last_pkt = -1, wind;
 
 void rdt_rcv(struct sockaddr * cli_addr, int sockfd, char * buf);
 void buildPacket(int fd, int id, char * buf);
 void sendFIN(struct sockaddr_in cli_addr, int sockfd);
+void update(uint32_t seq_num, uint32_t code);
 size_t get_offset(const int id);
 size_t get_size(const int it);
 size_t get_num_packets(const char * filename);
@@ -39,18 +41,24 @@ void error(char *msg)
 
 void handler(int sig)
 {
-	if(last_acked == top_seq_num)
+	if(base == last_pkt)
 	{
 		sendFIN(*cliref, *sockref);	
 		return;
 	}
-	if(top_seq_num != -1)
+	if(last_pkt != -1)
 	{
 		char pkt[MAX_PKT_SIZE];
-		buildPacket(*fileref, last_acked+1, pkt);
-//		printf("Retransmit Needed\n");
-		sendto(*sockref,pkt,MAX_PKT_SIZE,0,
-			(struct sockaddr *)cliref,sizeof(*cliref));	
+		int i;
+		for(i = base; i < (base + wind); i++)
+		{
+			if(i > last_pkt)
+				continue;
+			buildPacket(*fileref, i, pkt);
+//			printf("Retransmit Needed\n");
+			sendto(*sockref,pkt,MAX_PKT_SIZE,0,
+				(struct sockaddr *)cliref,sizeof(*cliref));	
+		}
 	}
 	retrans_count++;
 	if(retrans_count >= 5){
@@ -76,7 +84,7 @@ int main(int argc, char *argv[])
      cliref  = & cli_addr;	//These are global pointers for loss retrans
      sockref = & sockfd;
      fileref = & file;
-     last_acked = 0;
+     base = 0;
 
      char pkt[MAX_PKT_SIZE];	//our generic buffer
      char * payload; 	//just pointers
@@ -94,10 +102,18 @@ int main(int argc, char *argv[])
 	cwnd = atoi(argv[2]);
      else
 	cwnd = 1000; //1000 by default. Let's make it easy on ourselves.
+
 //   printf("%i\n",cwnd);
 
      if(cwnd%MAX_PKT_SIZE <= H_SIZE) //Edge Condition
 	cwnd -= (cwnd%MAX_PKT_SIZE);
+
+     if(cwnd == 0){
+	error("CWND too damn small!\n");
+	exit(1);
+     }
+
+     wind = (cwnd/MAX_PKT_SIZE) + ((cwnd%MAX_PKT_SIZE) ? 1 : 0);
 
      if(argc >= 4)
 	lp = atof(argv[3]);
@@ -128,7 +144,6 @@ int main(int argc, char *argv[])
 
 	header = (header_t) pkt;
 	payload = pkt + H_SIZE;
-	print_headers(header);
 	resetAlarm();
 
 	if(trueWithProb(lp))
@@ -144,35 +159,42 @@ int main(int argc, char *argv[])
 		continue;
 	}
 
+	print_headers(header);
 	
 	if(header->h_flag == H_REQ)
 	{
-		top_seq_num = get_num_packets(payload);
-//		printf("Number of packets to send: %i\n", top_seq_num);
+		last_pkt = get_num_packets(payload);
+		tracker = malloc((last_pkt+1)*sizeof(uint16_t));
+//		printf("Number of packets to send: %i\n", last_pkt);
 		if((file = open(payload,O_RDONLY))<0) 
 			error("Cannot Open File"); //get fd
 	}
 
-	if(header->h_seq_num > last_acked)
-	{
-		retrans_count = 0;
-		last_acked = header->h_seq_num;
-	}
+
+	update(header->h_seq_num, header->h_flag);
 	
-	if(last_acked == top_seq_num) //we're done, finish
+	if(base == last_pkt) //we're done, finish
 	{
 		sendFIN(cli_addr, sockfd);
 		while(header->h_flag != H_FIN)
 			rdt_rcv((struct sockaddr *)&cli_addr, sockfd, pkt);
+		free(tracker);
 		close(file);
 		break;
 	}
 
 	if(file)
 	{
-		//Send Packet
-	        buildPacket(file,last_acked+1,pkt);
-		sendto(sockfd,pkt,MAX_PKT_SIZE,0,(struct sockaddr *)&cli_addr,sizeof(cli_addr));	
+		int i;
+		for(i = base; i < base + wind; i++)
+		{
+			if(tracker[i] > 0 || i > last_pkt) //we don't want previously sent/acked packets or OOB packets to send.
+				continue;
+			//Send Packets
+	        	buildPacket(file,i,pkt);
+			sendto(sockfd,pkt,MAX_PKT_SIZE,0,(struct sockaddr *)&cli_addr,sizeof(cli_addr));
+			update(i, 0);
+		}
 	}
      } //While Loop
      return 0;
@@ -193,7 +215,7 @@ void buildPacket(int fd, int id, char * buf)
 		error("Error reading file");
 
 	header_t header = (header_t) buf;
-	header->h_flag = (id != top_seq_num) ? 2 : 0;
+	header->h_flag = (id != last_pkt) ? 2 : 0;
 	header->h_data_size = bytesRead;
 	header->h_seq_num = id;
 	header->h_offset = get_offset(id);
@@ -211,6 +233,18 @@ void sendFIN(struct sockaddr_in cli_addr, int sockfd)
 
     sendto(sockfd,header,sizeof(struct header),0,(struct sockaddr *)&cli_addr, sizeof(cli_addr)); //Sends our ACK
     free(header);
+}
+
+void update(uint32_t seq_num, uint32_t code)
+{
+	if(code == H_ACK){
+		retrans_count = 0;
+		tracker[seq_num] = 2; //we got an ack for this packet
+		while(tracker[base + 1] == 2)
+			base++; //move base forward if possible.
+	}
+	else
+		tracker[seq_num] =1; //we just sent a packet
 }
 
 size_t get_offset(const int id)

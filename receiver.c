@@ -49,7 +49,7 @@ void handler(int sig)
 
 int main(int argc, char *argv[])
 {
-    int sockfd, file, portno, last_pkt_rcv = 0;
+    int sockfd, file, portno, last_pkt_rcv;
     struct sockaddr_in serv_addr;
     struct hostent *server; //contains tons of information, including the server's IP address
     char pkt[MAX_PKT_SIZE];
@@ -142,11 +142,12 @@ listen:
 		close(file);
 		exit(0);
 	}
-
-	if(header->h_seq_num > last_pkt_rcv)
-		last_pkt_rcv = header->h_seq_num;
-
-	writePacket(file, header->h_seq_num, pkt);
+	
+	if(header->h_seq_num == last_pkt_rcv + 1)
+	{
+		last_pkt_rcv++;
+		writePacket(file, header->h_seq_num, pkt);
+	}
     }
 
     return 0;
