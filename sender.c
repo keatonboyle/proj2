@@ -28,6 +28,7 @@ void rdt_rcv(struct sockaddr * cli_addr, int sockfd, char * buf);
 void buildPacket(int fd, int id, char * buf);
 void sendFIN(struct sockaddr_in cli_addr, int sockfd);
 void update(uint32_t seq_num, uint32_t code);
+void shutdownSequence(struct sockaddr_in * cli_addr, int sockfd, char * buf, double lp, double cp);
 size_t get_offset(const int id);
 size_t get_size(const int it);
 size_t get_num_packets(const char * filename);
@@ -178,6 +179,8 @@ int main(int argc, char *argv[])
 	
 	if(base > last_pkt) //we're done, finish. We've seen the last pkt acked
 	{
+      shutdownSequence(&cli_addr, sockfd, pkt, lp, cp);
+      /*
       alarm(0);
 		sendFIN(cli_addr, sockfd);
       do {
@@ -185,6 +188,7 @@ int main(int argc, char *argv[])
       } while(header->h_flag != H_FIN);
 		free(tracker);
 		close(file);
+      */
 		break;
 	}
 
@@ -308,3 +312,57 @@ size_t get_file_size(const char * filename)
 		return st.st_size;
 	return -1;
 }
+
+int shutdownRetrans = 0;
+
+void shutdownHandler(int signum)
+{
+   sendFIN(*cliref, *sockref);
+   shutdownRetrans++;
+   alarm(TIMEOUT);
+   signal(SIGALRM, shutdownHandler);
+   siginterrupt(SIGALRM, 1);
+}
+
+void shutdownSequence(struct sockaddr_in * cli_addr, int sockfd, char * buf, double lp, double cp)
+{
+   alarm(0);
+   signal(SIGALRM, shutdownHandler);
+   siginterrupt(SIGALRM, 1);
+
+   sendFIN(*cli_addr, sockfd);
+   alarm(TIMEOUT);
+
+   while(1)
+   {
+      rdt_rcv((struct sockaddr *) cli_addr, sockfd, buf);
+
+
+      if(shutdownRetrans >= 5)
+      {
+         printf("We assume the client has closed the connection after 5 seconds, shutting down.\n");
+         break;
+      }
+
+      if(trueWithProb(lp))
+      {
+         printf("Response FIN Dropped\n");
+         continue;
+      }
+
+      if(trueWithProb(cp))
+      {
+         printf("Response FIN Corrupted\n");
+         continue;
+      }
+
+      if(((header_t) buf)->h_flag == H_FIN)
+      {
+         printf("Client sent FIN back, shutting down.\n");
+         break;
+      }
+   };
+}
+
+
+
