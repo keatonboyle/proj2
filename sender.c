@@ -41,7 +41,7 @@ void error(char *msg)
 
 void handler(int sig)
 {
-	if(base >= last_pkt)
+	if(base > last_pkt)
 	{
 		sendFIN(*cliref, *sockref);	
 		return;
@@ -63,7 +63,7 @@ void handler(int sig)
 		}
 	}
 	retrans_count++;
-	if(retrans_count >= 5){
+	if(retrans_count >= 20){
 		printf("TIMEOUT\n");
 		exit(1);
 	}else 

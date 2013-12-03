@@ -39,7 +39,7 @@ void handler(int sig)
 {
     sendREQ(*ref1, *ref2, *ref3);
     retrans_count++;
-    if(retrans_count >= 5){
+    if(retrans_count >= 20){
 	printf("TIMEOUT\n");
 	exit(0);
     }
