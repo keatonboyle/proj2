@@ -134,7 +134,7 @@ listen:
    printf("Recieved w/ ");
 	print_headers(header);
 
-	if(header->h_seq_num == 1) //Gotta get rid of that retrans timeout
+	if(header->h_seq_num >= 1) //Gotta get rid of that retrans timeout
 		alarm(0);
 
 	if(header->h_flag == H_FIN)

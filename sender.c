@@ -19,7 +19,7 @@
 static struct sockaddr_in * cliref;
 static int * sockref;
 static int * fileref;
-static uint16_t * tracker;
+static uint16_t * tracker = NULL;
 static int base = 0;
 static int retrans_count = 0;
 static size_t cwnd, last_pkt = -1, wind;
@@ -165,10 +165,11 @@ int main(int argc, char *argv[])
    printf("Recieved w/ ");
 	print_headers(header);
 	
-	if(header->h_flag == H_REQ)
+	if(header->h_flag == H_REQ && tracker == NULL)
 	{
 		last_pkt = get_num_packets(payload);
 		tracker = malloc((last_pkt+1)*sizeof(uint16_t));
+      memset(tracker, 0,(last_pkt+1)*sizeof(uint16_t)); 
 //		printf("Number of packets to send: %i\n", last_pkt);
 		if((file = open(payload,O_RDONLY))<0) 
 			error("Cannot Open File"); //get fd
