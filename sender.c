@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
 
 	update(header->h_seq_num, header->h_flag);
 	
-	if(base == last_pkt) //we're done, finish
+	if(base > last_pkt) //we're done, finish. We've seen the last pkt acked
 	{
 		sendFIN(cli_addr, sockfd);
 		while(header->h_flag != H_FIN)
@@ -237,10 +237,10 @@ void sendFIN(struct sockaddr_in cli_addr, int sockfd)
 
 void update(uint32_t seq_num, uint32_t code)
 {
-	if(code == H_ACK){
+	if(code == H_ACK || code == H_REQ){
 		retrans_count = 0;
 		tracker[seq_num] = 2; //we got an ack for this packet
-		while(tracker[base + 1] == 2)
+		while(tracker[base] == 2)
 			base++; //move base forward if possible.
 	}
 	else
