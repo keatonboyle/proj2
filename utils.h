@@ -11,6 +11,13 @@
 #define H_MAX_DATA	(MAX_PKT_SIZE - H_SIZE)
 #include <stdbool.h>
 
+static char flag_msg[5][5] = {
+   "LAST",
+   "ACK",
+   "FRAG",
+   "REQ",
+   "FIN" };
+
 struct header;
 
 typedef struct __attribute__((packed)) header 
@@ -23,8 +30,8 @@ typedef struct __attribute__((packed)) header
 
 static void print_headers(header_t header)
 {
-	printf("Header: {SeqNum: %i, Flag: %i, Data: %i, Offset: %i}\n", 
-		header->h_seq_num, 	header->h_flag, 
+	printf("Header: {SeqNum: %i, Flag: %i (%s), Data: %i, Offset: %i}\n", 
+		header->h_seq_num, 	header->h_flag,   flag_msg[header->h_flag],
 		header->h_data_size,	header->h_offset);
 }
 

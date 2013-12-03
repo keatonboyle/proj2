@@ -122,12 +122,12 @@ listen:
 
 	if(trueWithProb(cp)) //Send a dup ACK and wait.
 	{
-//		printf("Packet %i Corrupted\n", header->h_seq_num);
+  		printf("Packet %i Corrupted\n", header->h_seq_num);
 		continue;
 	}
 	if(trueWithProb(lp)) //Wait.
 	{
-//		printf("Packet %i Dropped\n", header->h_seq_num);
+  		printf("Packet %i Dropped\n", header->h_seq_num);
 		goto listen;
 	}
 

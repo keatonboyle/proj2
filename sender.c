@@ -148,13 +148,13 @@ int main(int argc, char *argv[])
 
 	if(trueWithProb(lp))
 	{
-//		printf("ACK %i Dropped\n", header->h_seq_num);
+  		printf("ACK %i Dropped\n", header->h_seq_num);
 		continue;
 	}
 
 	if(trueWithProb(cp))
 	{
-//		printf("ACK %i Corrupted\n", header->h_seq_num);
+  		printf("ACK %i Corrupted\n", header->h_seq_num);
 		retrans_count = 0; //we received something, keep alive
 		continue;
 	}
@@ -252,8 +252,10 @@ size_t get_offset(const int id)
 	if(cwnd <= MAX_PKT_SIZE)
 		return (id-1) * (cwnd - H_SIZE);
 	
-	size_t pkts_in_cwnd = (cwnd/MAX_PKT_SIZE) + ((cwnd%MAX_PKT_SIZE)?1:0);
+	size_t pkts_in_cwnd = (cwnd/MAX_PKT_SIZE) + ((cwnd%MAX_PKT_SIZE)?1:0); //ceiling(cwnd/MAX_PKT_SIZE)
 	size_t diff_bytes = H_MAX_DATA - (cwnd % MAX_PKT_SIZE) + H_SIZE; 
+
+                              //subtract diff_bytes for each full window behind this one
 	return (id-1)*H_MAX_DATA - ((id-1)/pkts_in_cwnd)*diff_bytes;
 }
 
@@ -263,8 +265,9 @@ size_t get_size(const int id)
 		return (cwnd - H_SIZE);
 	
 	size_t pkts_in_cwnd = (cwnd/MAX_PKT_SIZE) + ((cwnd%MAX_PKT_SIZE)?1:0);
-	if(id % pkts_in_cwnd == 0)
-		return cwnd % MAX_PKT_SIZE - H_SIZE;
+
+	if(id % pkts_in_cwnd == 0)                 //corner case when packets fit perfectly in cwnd
+		return (cwnd % MAX_PKT_SIZE - H_SIZE) + ((cwnd%MAX_PKT_SIZE)?0:MAX_PKT_SIZE);
 
 	return H_MAX_DATA;
 }
@@ -279,7 +282,7 @@ size_t get_num_packets(const char * filename)
 		return (size / data) + ((size % data) ? 1 : 0);
 	}
 
-	size_t p;
+	int p;
 
 	for(p = 1; get_offset(p) < size; p++)
 		continue;
