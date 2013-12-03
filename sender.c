@@ -41,7 +41,7 @@ void error(char *msg)
 
 void handler(int sig)
 {
-	if(base == last_pkt)
+	if(base >= last_pkt)
 	{
 		sendFIN(*cliref, *sockref);	
 		return;
@@ -56,6 +56,8 @@ void handler(int sig)
 				continue;
 			buildPacket(*fileref, i, pkt);
 //			printf("Retransmit Needed\n");
+         printf("Sending w/ ");
+         print_headers((header_t) pkt);
 			sendto(*sockref,pkt,MAX_PKT_SIZE,0,
 				(struct sockaddr *)cliref,sizeof(*cliref));	
 		}
@@ -159,6 +161,7 @@ int main(int argc, char *argv[])
 		continue;
 	}
 
+   printf("Recieved w/ ");
 	print_headers(header);
 	
 	if(header->h_flag == H_REQ)
@@ -175,9 +178,11 @@ int main(int argc, char *argv[])
 	
 	if(base > last_pkt) //we're done, finish. We've seen the last pkt acked
 	{
+      alarm(0);
 		sendFIN(cli_addr, sockfd);
-		while(header->h_flag != H_FIN)
+      do {
 			rdt_rcv((struct sockaddr *)&cli_addr, sockfd, pkt);
+      } while(header->h_flag != H_FIN);
 		free(tracker);
 		close(file);
 		break;
@@ -192,6 +197,8 @@ int main(int argc, char *argv[])
 				continue;
 			//Send Packets
 	        	buildPacket(file,i,pkt);
+         printf("Sending w/ ");
+         print_headers((header_t) pkt);
 			sendto(sockfd,pkt,MAX_PKT_SIZE,0,(struct sockaddr *)&cli_addr,sizeof(cli_addr));
 			update(i, 0);
 		}
@@ -215,7 +222,7 @@ void buildPacket(int fd, int id, char * buf)
 		error("Error reading file");
 
 	header_t header = (header_t) buf;
-	header->h_flag = (id != last_pkt) ? 2 : 0;
+	header->h_flag = (id != last_pkt) ? H_FRAG : 0;
 	header->h_data_size = bytesRead;
 	header->h_seq_num = id;
 	header->h_offset = get_offset(id);
@@ -230,6 +237,9 @@ void sendFIN(struct sockaddr_in cli_addr, int sockfd)
     header->h_seq_num = 0;
     header->h_flag = H_FIN;
     header->h_data_size = 0;
+
+    printf("Sending w/ ");
+    print_headers(header);
 
     sendto(sockfd,header,sizeof(struct header),0,(struct sockaddr *)&cli_addr, sizeof(cli_addr)); //Sends our ACK
     free(header);
@@ -253,7 +263,8 @@ size_t get_offset(const int id)
 		return (id-1) * (cwnd - H_SIZE);
 	
 	size_t pkts_in_cwnd = (cwnd/MAX_PKT_SIZE) + ((cwnd%MAX_PKT_SIZE)?1:0); //ceiling(cwnd/MAX_PKT_SIZE)
-	size_t diff_bytes = H_MAX_DATA - (cwnd % MAX_PKT_SIZE) + H_SIZE; 
+	size_t diff_bytes = H_MAX_DATA - (cwnd % MAX_PKT_SIZE) + H_SIZE - ((cwnd%MAX_PKT_SIZE)?0:MAX_PKT_SIZE);
+; 
 
                               //subtract diff_bytes for each full window behind this one
 	return (id-1)*H_MAX_DATA - ((id-1)/pkts_in_cwnd)*diff_bytes;

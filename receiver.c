@@ -131,6 +131,7 @@ listen:
 		goto listen;
 	}
 
+   printf("Recieved w/ ");
 	print_headers(header);
 
 	if(header->h_seq_num == 1) //Gotta get rid of that retrans timeout
@@ -138,6 +139,7 @@ listen:
 
 	if(header->h_flag == H_FIN)
 	{
+      alarm(0);
 		sendFIN(serv_addr, sockfd);
 		close(file);
 		exit(0);
@@ -175,6 +177,8 @@ void sendACK(struct sockaddr_in serv_addr, int sockfd, int id)
     header->h_flag = H_ACK;
     header->h_data_size = 0;
 
+    printf("Sending w/ ");
+    print_headers(header);
     sendto(sockfd,header,sizeof(struct header),0,(struct sockaddr *)&serv_addr, sizeof(serv_addr)); //Sends our ACK
     free(header);
 }
@@ -194,6 +198,8 @@ void sendREQ(struct sockaddr_in serv_addr, int sockfd, const char * filename)
     memcpy(buf, header, H_SIZE);
     memcpy(buf+H_SIZE, filename, H_MAX_DATA-1);
 
+    printf("Sending w/ ");
+    print_headers(header);
     sendto(sockfd,buf,(H_SIZE + strlen(filename)),0,(struct sockaddr *)&serv_addr, sizeof(serv_addr));
 }
 void sendFIN(struct sockaddr_in serv_addr, int sockfd)
@@ -203,6 +209,8 @@ void sendFIN(struct sockaddr_in serv_addr, int sockfd)
     header->h_flag = H_FIN;
     header->h_data_size = 0;
 
+    printf("Sending w/ ");
+    print_headers(header);
     sendto(sockfd,header,sizeof(struct header),0,(struct sockaddr *)&serv_addr, sizeof(serv_addr)); //Sends our ACK
     free(header);
 }
