@@ -255,8 +255,8 @@ void update(uint32_t seq_num, uint32_t code)
 	if(code == H_ACK || code == H_REQ){
 		retrans_count = 0;
 		tracker[seq_num] = 2; //we got an ack for this packet
-		while(tracker[base] == 2)
-			base++; //move base forward if possible.
+		if(base < seq_num)
+			base = seq_num; //move base forward if possible.
 	}
 	else
 		tracker[seq_num] =1; //we just sent a packet
